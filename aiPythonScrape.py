@@ -2,7 +2,6 @@ import os.path
 import sys
 import requests
 from bs4 import BeautifulSoup
-from pandas.io.json import json_normalize
 import pandas as pd
 import xml.etree.ElementTree as ET
 import time
@@ -25,8 +24,30 @@ class Kirke:
         self.sogndk_url= None
         self.provsti_id = None
         self.provsti_navn = None
+        self.staff = []
         self.priests = []
         self.account_status = ""
+
+'''
+<div class="person_data">
+    <div class="stilling pt-md-4 bigger-font"><font style="vertical-align: inherit;"><font style="vertical-align: inherit;">Parish Priest (Church Bookkeeper)</font></font></div>
+    <div class="navn"><font style="vertical-align: inherit;"><font style="vertical-align: inherit;">Jesper Bacher</font></font></div>
+    <div class="adr1"><font style="vertical-align: inherit;"><font style="vertical-align: inherit;">Rubbeløkkevej 10</font></font></div>
+    <div class="postnr_by"><font style="vertical-align: inherit;"><font style="vertical-align: inherit;">4970 Rødby</font></font></div>
+    <div class="email"><a href="mailto:jeba@km.dk"><font style="vertical-align: inherit;"><font style="vertical-align: inherit;">jeba@km.dk</font></font></a></div>
+    <div class="tlf"><font style="vertical-align: inherit;"><font style="vertical-align: inherit;">Phone: 54608118</font></font></div>
+    <div class="my-6"><a href="https://sikkerformular.kirkenettet.dk/contact/form?eid=25312" title="If you wish to contact Jesper Bacher and would like to enclose confidential information, such as  CPR number, we recommend that you make a secure inquiry." target="_blank" class="btn btn-secondary"><font style="vertical-align: inherit;"><font style="vertical-align: inherit;">Secure inquiry</font></font></a></div>
+</div>
+'''
+class Staff:
+    def __init__(self):
+        self.stilling = None
+        self.navn = None
+        self.adr1 = None
+        self.postnr_by = None
+        self.email = None
+        self.tlf = None
+
 
 def get_xml_data(url, logger):
     try:
@@ -54,7 +75,6 @@ def parse_kirke_xml(xml_data, kirker):
         k.sogne_navn = kirke.find("sognenavn").text
         k.sogndk_url = kirke.find("sogndkurl").text
         kirker.append(k)
-   ## return kirker
 
 def get_text_or_empty(element):
     return element.text if element else ""
@@ -71,21 +91,23 @@ def scrape_priests(kirke, logger):
         return
 
     try:
-        # Find all the elements with class "praester"
-        priests = soup.find_all(class_="praester")
+        # Find all the elements with class "person_data"
+        staff_list = soup.find_all(class_="person_data")
 
-        # Extract information about each priest from the 'person' class
-        kirke.priests = [{
-            "name": get_text_or_empty(person_data.find(class_="navn")),
-            "job": get_text_or_empty(person_data.find(class_="stilling")),
-            "phone": "".join(re.findall(r'\d+', get_text_or_empty(person_data.find(class_="tlf")))),
-            "email": get_text_or_empty(person_data.find(class_="email"))
-        } for priest in priests
-            if (person := priest.find(class_="person")) is not None
-            and (person_data := person.find(class_="person_data")) is not None]
+        # Extract information about each staff member from the 'person_data' class
+        kirke.staff = []
+        for staff in staff_list:
+            new_staff = Staff()
+            new_staff.navn = get_text_or_empty(staff.find(class_="navn"))
+            new_staff.stilling = get_text_or_empty(staff.find(class_="stilling"))
+            new_staff.adr1 = get_text_or_empty(staff.find(class_="adr1"))
+            new_staff.postnr_by = get_text_or_empty(staff.find(class_="postnr_by"))
+            new_staff.email = get_text_or_empty(staff.find(class_="email"))
+            new_staff.tlf = get_text_or_empty(staff.find(class_="tlf"))
+            kirke.staff.append(new_staff)
 
     except requests.exceptions.RequestException as e:
-        logger.error("An error occurred while scraping the priests data for Kirke ID %s: %s", kirke.kirke_id, e)
+        logger.error("An error occurred while scraping the staff data for Kirke ID %s: %s", kirke.kirke_id, e)
 
 def save_to_excel(kirker, logger):
     # Check if user wants to save data
@@ -101,9 +123,6 @@ def save_to_excel(kirker, logger):
     root = Tk()
     root.withdraw()
 
-    #if __debug__:
-    #    file_path = "kirker_debug.xlsx"
-    #else:
     file_path = filedialog.asksaveasfilename(defaultextension=".xlsx")
     if not file_path:
         logger.warning("No file selected. Data not saved.")
