@@ -1,0 +1,15 @@
+{
+    "version": "0.2.0",
+    "configurations": [    
+        {
+            "name": "Python: manual file paths",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": ["--arg1", "C:/Users/westj/Desktop/DataScrape/aiScrape/aiPyScrape/kirker_v2.xlsx", 
+            "--arg2", "C:/Users/westj/Desktop/DataScrape/All CVLI DK Accounts-2022-11-15-14-25-06 ver 2.xlsx"]
+        }
+    ]
+}
