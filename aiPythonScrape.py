@@ -19,24 +19,25 @@ class Kirke:
         self.kirke_addr2 = None
         self.kirke_postnr = None
         self.kirke_by = None
+        self.kirke_lat = None
+        self.kirke_lng = None
         self.sogne_id = None
         self.sogne_navn = None
         self.sogndk_url= None
         self.provsti_id = None
         self.provsti_navn = None
         self.staff = []
-        self.priests = []
         self.account_status = ""
 
 '''
 <div class="person_data">
-    <div class="stilling pt-md-4 bigger-font"><font style="vertical-align: inherit;"><font style="vertical-align: inherit;">Parish Priest (Church Bookkeeper)</font></font></div>
-    <div class="navn"><font style="vertical-align: inherit;"><font style="vertical-align: inherit;">Jesper Bacher</font></font></div>
-    <div class="adr1"><font style="vertical-align: inherit;"><font style="vertical-align: inherit;">Rubbeløkkevej 10</font></font></div>
-    <div class="postnr_by"><font style="vertical-align: inherit;"><font style="vertical-align: inherit;">4970 Rødby</font></font></div>
-    <div class="email"><a href="mailto:jeba@km.dk"><font style="vertical-align: inherit;"><font style="vertical-align: inherit;">jeba@km.dk</font></font></a></div>
-    <div class="tlf"><font style="vertical-align: inherit;"><font style="vertical-align: inherit;">Phone: 54608118</font></font></div>
-    <div class="my-6"><a href="https://sikkerformular.kirkenettet.dk/contact/form?eid=25312" title="If you wish to contact Jesper Bacher and would like to enclose confidential information, such as  CPR number, we recommend that you make a secure inquiry." target="_blank" class="btn btn-secondary"><font style="vertical-align: inherit;"><font style="vertical-align: inherit;">Secure inquiry</font></font></a></div>
+    <div class="stilling pt-md-4 bigger-font"><font><font>Parish Priest (Church Bookkeeper)</font></font></div>
+    <div class="navn"><font><font>Jesper Bacher</font></font></div>
+    <div class="adr1"><font><font>Rubbeløkkevej 10</font></font></div>
+    <div class="postnr_by"><font><font>4970 Rødby</font></font></div>
+    <div class="email"><a><font><font>jeba@km.dk</font></font></a></div>
+    <div class="tlf"><font><font>Phone: 54608118</font></font></div>
+    <div class="my-6"><a><font><font>Secure inquiry</font></font></a></div>
 </div>
 '''
 class Staff:
@@ -69,6 +70,8 @@ def parse_kirke_xml(xml_data, kirker):
         k.kirke_addr2 = kirke.find("kirkeaddr2").text
         k.kirke_postnr = int(kirke.find("kirkepostnr").text)
         k.kirke_by = kirke.find("kirkeby").text
+        k.kirke_lat = kirke.find("lat").text
+        k.kirke_lng = kirke.find("lng").text
         k.provsti_id = int(kirke.find("provstiId").text)
         k.provsti_navn = kirke.find("provstinavn").text
         k.sogne_id = int(kirke.find("sogneId").text)
@@ -111,10 +114,10 @@ def scrape_priests(kirke, logger):
 
 def save_to_excel(kirker, logger):
     # Check if user wants to save data
-    save_file_choice = input("Do you want to save the data to an Excel file? (Y/n) ")
-    while save_file_choice not in ["Y", "n"]:
+    save_file_choice = input("Do you want to save the data to an Excel file? (y/n) ")
+    while save_file_choice not in ["y", "n"]:
         logger.warning("Invalid choice. Please try again.")
-        save_file_choice = input("Do you want to save the data to an Excel file? (Y/n) ")
+        save_file_choice = input("Do you want to save the data to an Excel file? (y/n) ")
     if save_file_choice == "n":
         logger.info("Data not saved.")
         return
@@ -131,27 +134,23 @@ def save_to_excel(kirker, logger):
     # Create a new Excel workbook
     workbook = pd.ExcelWriter(file_path, engine='openpyxl')
 
-    # Create worksheet for Kirker data
-    kirker_df = pd.DataFrame([k.__dict__ for k in kirker])
-    kirker_df.drop('priests', axis=1, inplace=True)
-    kirker_df.to_excel(workbook, index=False, sheet_name='Kirker')
-
-    # Create worksheet for Priests data
-    priests_df = pd.DataFrame()
+    # Create worksheet for Kirker and Staff data
+    kirker_list = []
     for k in kirker:
-        for p in k.priests:
-            p['kirke_id'] = k.kirke_id
-            p['sogne_id'] = k.sogne_id
-        priests_df = pd.concat([priests_df, pd.DataFrame(k.priests)])
-    priests_df.to_excel(workbook, index=False, sheet_name='Priests')
+        for s in k.staff:
+            kirke_dict = {
+                'Account Status': k.account_status,
+                'Sogne_id': k.sogne_id,
+                'Kirke_id': k.kirke_id,
+                'Kirke_navn': k.kirke_navn
+            }
+            kirke_dict.update(k.__dict__)
+            kirke_dict.update(s.__dict__)
+            kirker_list.append(kirke_dict)
 
-    # Create a new list for Kirke objects without account status
-    kirker_without_account_status = [k for k in kirker if k.account_status == ""]
-
-    # Create worksheet for missing Account Status
-    df_kirker_without_account_status = pd.DataFrame([k.__dict__ for k in kirker_without_account_status])
-    df_kirker_without_account_status.drop('priests', axis=1, inplace=True)
-    df_kirker_without_account_status.to_excel(workbook, index=False, sheet_name='No Account Status')
+    kirker_df = pd.DataFrame(kirker_list)
+    kirker_df.drop(['staff'], axis=1, inplace=True)
+    kirker_df.to_excel(workbook, index=False, sheet_name='Kirker and Staff')
 
     # Save workbook to file path
     workbook.save()
@@ -174,109 +173,30 @@ def main(kirker):
     logger.addHandler(handler)
 
     while True:
-        logger.info("Press 1 to import existing data from an Excel file.")
-        logger.info("Press 2 to scrape new data from the web.")
-        logger.info("Press 3 to import 'Account Status' field from an Excel file.")
+        logger.info("Press 1 to scrape new data from the web.")
+        logger.info("Press 2 to import 'Account Status' field from an Excel file.")
         logger.info("Press E to exit.")
         choice = input("Enter your choice: ")
 
+        # Get the arguments passed to the script
+        args = sys.argv
         if choice == "1":
-           # Get the arguments passed to the script
-            args = sys.argv
-            if "--arg1" in args:
-                logger.debug("Running in debug mode")
-                # Get the index of the argument
-                arg_index = args.index("--arg1")
-                # Get the value of the argument
-                arg_value = args[arg_index + 1]
-                logger.debug(f"The value of --arg1 is: {arg_value}")
-                file_path_1 = arg_value
-                if not os.path.isfile(file_path_1):
-                    logger.warning("File not found. Please try again or check this path exists: {}", arg_value)
-                    continue
-            else:
-                # Create a Tkinter window to use for the file dialog
-                root = Tk()
-                root.withdraw()
-
-                # Open a file dialog to select the Excel file
-                file_path_1 = filedialog.askopenfilename(title="Select Excel file", filetypes=[("Excel files", "*.xlsx;*.xls")])
-
-                # Check that a file was selected
-                if not file_path_1:
-                    logger.warning("No file selected. Please try again.")
-                    continue
-
-                # Check that the file exists
-                if not os.path.isfile(file_path_1):
-                    logger.warning("File not found. Please try again.")
-                    continue                
-            try:
-                df = pd.read_excel(file_path_1)
-                logger.info("%s rows loaded from %s", len(df.index), file_path_1)
-
-                for index, row in df.iterrows():
-                    # Check if kirke_id already exists in kirker list
-                    existing_kirke = next((k for k in kirker if k.kirke_id == row['kirke_id']), None)
-
-                    if existing_kirke:
-                        # Update existing kirke object
-                        existing_kirke.kirke_id = row['kirke_id']
-                        existing_kirke.kirke_navn = row['kirke_navn']
-                        existing_kirke.kirke_addr1 = row['kirke_addr1']
-                        existing_kirke.kirke_addr2 = row['kirke_addr2']
-                        existing_kirke.kirke_postnr = row['kirke_postnr']
-                        existing_kirke.kirke_by = row['kirke_by']
-                        existing_kirke.sogne_navn = row['sogne_navn']
-                        existing_kirke.sogndk_url = row['sogndk_url']
-                        existing_kirke.provsti_id = row['provsti_id']
-                        existing_kirke.provsti_navn = row['provsti_navn']
-                        logger.info("Updated Kirke with kirke_id %s", row['kirke_id'])
-                    else:
-                        # Create new kirke object
-                        kirke = Kirke()
-                        kirke.kirke_id = row['kirke_id']
-                        kirke.kirke_navn = row['kirke_navn']
-                        kirke.kirke_addr1 = row['kirke_addr1']
-                        kirke.kirke_addr2 = row['kirke_addr2']
-                        kirke.kirke_postnr = row['kirke_postnr']
-                        kirke.kirke_by = row['kirke_by']
-                        kirke.sogne_id = row['sogne_id']
-                        kirke.sogne_navn = row['sogne_navn']
-                        kirke.sogndk_url = row['sogndk_url']
-                        kirke.provsti_id = row['provsti_id']
-                        kirke.provsti_navn = row['provsti_navn']
-                        kirker.append(kirke)
-                        logger.info("Added new Kirke with kirke_id %s", row['kirke_id'])
-
-            except FileNotFoundError:
-                logger.error("File not found. Please try again.")
-            except Exception as e:
-                logger.error("An error occurred while loading the data: %s. Please try again.", e)
-
-
-        elif choice == "2":
             xml_data = get_xml_data("http://sogn.dk/xmlfeeds/kirker.php", logger)
             if xml_data:
                 parse_kirke_xml(xml_data, kirker)
                 logger.info("%s churches found.", len(kirker))
                 scrape_priests_choice = input("Do you want to scrape information about priests for each church? (Y/n) ")
-                while scrape_priests_choice not in ["Y", "n"]:
+                while scrape_priests_choice not in ["y", "n"]:
                     logger.warning("Invalid choice. Please try again.")
                     scrape_priests_choice = input("Do you want to scrape information about priests for each church? (Y/n) ")
-                if scrape_priests_choice == "Y":
+                if scrape_priests_choice == "y":
                     for k in tqdm(kirker, total=len(kirker), desc="Scraping Priests Data"):
                         scrape_priests(k, logger)
                         time.sleep(0.5)
-
-                        # Backup kirker list to Excel file
-                    df = pd.DataFrame([k.__dict__ for k in kirker])
-                    df.to_excel("kirker_backup.xlsx", index=False, sheet_name='Kirker', engine='openpyxl', startrow=0, header=True)
-                    logger.info("Kirker list backed up to 'kirker_backup.xlsx'.")
             else:
                 logger.error("Unable to retrieve data from the web. Please try again.")
 
-        elif choice == "3":
+        elif choice == "2":
             if "--arg2" in args:
                 logger.debug("Running in debug mode")
                 # Get the index of the argument
